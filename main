@@ -1,0 +1,191 @@
+import pyttsx3
+import datetime
+import speech_recognition as sr
+import wikipedia
+import webbrowser as wb
+import os
+import requests
+import json
+import time as tm
+from threading import Thread
+
+class VoiceAssistant:
+    def __init__(self):
+        self.engine = pyttsx3.init()
+        self.voice_setup()
+        
+    def voice_setup(self):
+        voices = self.engine.getProperty('voices')
+        self.engine.setProperty('voice', voices[1].id)  
+        self.engine.setProperty('rate', 150)  
+
+    def speak(self, audio):
+        self.engine.say(audio)
+        self.engine.runAndWait()
+
+    def current_time(self):
+        time = datetime.datetime.now().strftime("%I:%M %p")
+        self.speak("The current time is " + time)
+
+    def current_date(self):
+        date = datetime.datetime.now().strftime("%B %d, %Y")
+        self.speak("Today's date is " + date)
+
+    def greet(self):
+        hour = datetime.datetime.now().hour
+        if 6 <= hour < 12:
+            self.speak("Good morning!")
+        elif 12 <= hour < 18:
+            self.speak("Good afternoon!")
+        else:
+            self.speak("Good evening!")
+        self.speak("How can I assist you today?")
+
+    def listen(self):
+        r = sr.Recognizer()
+        with sr.Microphone() as source:
+            print("Listening...")
+            r.pause_threshold = 1
+            audio = r.listen(source)
+        try:
+            print("Recognizing...")
+            query = r.recognize_google(audio, language='en-US')
+            print(f"User said: {query}")
+            return query.lower()
+        except sr.UnknownValueError:
+            self.speak("Sorry, I did not understand that.")
+            return None
+        except sr.RequestError:
+            self.speak("Sorry, there was an issue with the request.")
+            return None
+        except Exception as e:
+            print(f"Error: {e}")
+            return None
+
+    def wikipedia_search(self, query):
+        try:
+            self.speak("Searching Wikipedia...")
+            result = wikipedia.summary(query, sentences=2)
+            self.speak(result)
+        except wikipedia.exceptions.DisambiguationError as e:
+            self.speak("There are multiple results, can you be more specific?")
+        except wikipedia.exceptions.PageError:
+            self.speak("I couldn't find anything related to your search.")
+        except Exception as e:
+            self.speak("Something went wrong.")
+            print(f"Error: {e}")
+
+    def open_chrome(self, query):
+        self.speak("What should I search for?")
+        search = self.listen()
+        if search:
+            chromepath = "C:/Program Files/Google/Chrome/Application/chrome.exe %s"
+            wb.get(chromepath).open_new_tab(f"{search}.com")
+
+    def fetch_news(self):
+        api_key = "8a92e946311341c594830d37e2c0266b"
+        url = f"http://newsapi.org/v2/top-headlines?country=us&apiKey={api_key}"
+        response = requests.get(url)
+        news_data = response.json()
+
+        self.speak("Here are today's top news headlines:")
+        for i, article in enumerate(news_data['articles'][:5]):
+            self.speak(f"Headline {i+1}: {article['title']}")
+
+
+
+    
+    def tell_joke(self):
+        joke_url = "https://official-joke-api.appspot.com/random_joke"
+        response = requests.get(joke_url)
+        joke = response.json()
+        self.speak(joke['setup'])
+        tm.sleep(2)  
+        self.speak(joke['punchline'])
+
+    def task_manager(self):
+        tasks = []
+        while True:
+            self.speak("What would you like to do? You can say add task, show tasks, or clear tasks.")
+            query = self.listen()
+            if query:
+                if "add task" in query:
+                    self.speak("What task would you like to add?")
+                    task = self.listen()
+                    tasks.append(task)
+                    self.speak(f"Task '{task}' added.")
+                elif "show tasks" in query:
+                    if tasks:
+                        self.speak("Your tasks are:")
+                        for i, task in enumerate(tasks):
+                            self.speak(f"Task {i+1}: {task}")
+                    else:
+                        self.speak("You have no tasks.")
+                elif "clear tasks" in query:
+                    tasks.clear()
+                    self.speak("All tasks cleared.")
+                elif "stop" in query:
+                    self.speak("Exiting task manager.")
+                    break
+
+    def set_alarm(self, alarm_time):
+        current_time = datetime.datetime.now().strftime("%H:%M")
+        while current_time != alarm_time:
+            print(f"Waiting... Current time: {current_time}")
+            tm.sleep(10)
+            current_time = datetime.datetime.now().strftime("%H:%M")
+
+        self.speak("It's time to wake up!")
+    def help(self):
+        help_text = (
+            "Here are the commands you can use:\n"
+            "- 'time': Get the current time.\n"
+            "- 'date': Get today's date.\n"
+            "- 'wikipedia [search term]': Search Wikipedia for the given term.\n"
+            "- 'chrome [search term]': Open Chrome and search for the term.\n"
+            "- 'news': Get the latest news headlines.\n"
+            "- 'joke': Hear a random joke.\n"
+            "- 'task manager': Manage your tasks.\n"
+            "- 'set alarm [HH:MM]': Set an alarm for the specified time.\n"
+            "- 'help': Get this list of commands.\n"
+            "- 'stop listening': Exit the assistant."
+        )
+        self.speak(help_text)
+
+    def main(self):
+        self.greet()
+        while True:
+            query = self.listen()
+            if query:
+                if "time" in query:
+                    self.current_time()
+                elif "date" in query:
+                    self.current_date()
+                elif "wikipedia" in query:
+                    self.speak("What do you want to search on Wikipedia?")
+                    search_term = self.listen()
+                    self.wikipedia_search(search_term)
+                elif "chrome" in query:
+                    self.open_chrome(query)
+                elif "news" in query:
+                    self.fetch_news()
+                elif "joke" in query:
+                    self.tell_joke()
+                elif "task manager" in query:
+                    self.task_manager()
+                elif "set alarm" in query:
+                    self.speak("What time should I set the alarm for? Please specify in HH:MM format.")
+                    self.speak("Specify hour")
+
+                    hour = self.listen()
+                    self.speak("specif minute")
+                    minute = self.listen()
+                    alarm_time = hour+":"+minute
+                    self.set_alarm(alarm_time)
+                elif "stop listening" in query:
+                    self.speak("Goodbye!")
+                    break
+
+if __name__ == "__main__":
+    assistant = VoiceAssistant()
+    assistant.main()
